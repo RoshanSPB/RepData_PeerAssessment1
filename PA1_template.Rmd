@@ -1,0 +1,306 @@
+
+---
+title: "PA1_template.Rmd"
+author: "Roshan"
+date: "December 30, 2018"
+output: 
+  html_document:
+    keep_md: TRUE
+---
+
+```{r setoptions, echo = FALSE}
+
+library(knitr)
+opts_chunk$set(echo = FALSE, results = "hide")
+
+```
+
+```{r load libraries, message=FALSE, warning=FALSE, paged.print=FALSE,echo=TRUE}
+
+#setwd("./Project")
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+
+```
+```{r process data, echo = TRUE}
+
+#read data from the csv file
+originalData = read.csv("activity.csv")
+
+#change the date as Date class and format "%m-%d-%Y"
+originalData$date <- as.Date(originalData$date,format = "%m/%d/%Y")
+originalData$date <- format.Date(originalData$date,"%m-%d-%Y")
+
+#remove NA rows from the data
+originalData<-originalData[!is.na(originalData$steps),]
+
+```
+
+###[1] What is mean total number of steps taken per day?
+
+```{r Plot the histogram of the total number of steps taken each day, echo=TRUE}
+
+#read the original data from csv file
+ originalData = read.csv("activity.csv")
+ 
+#change the date as Date class and format "%m-%d-%Y"
+ originalData$date <- as.Date(originalData$date,format = "%m/%d/%Y")
+originalData$date <- format.Date(originalData$date,"%m-%d-%Y")
+
+#select only !NA values
+originalData<-originalData[!is.na(originalData$steps),]
+
+#keep seperate calculation for for with NA
+originalDataNA = read.csv("activity.csv")
+
+# calculate sum of steps per date
+data <- originalData %>%
+        group_by(date) %>%
+        summarise(totalSteps = sum(steps))%>%
+        ungroup()
+#construct the plot 
+g <- ggplot(data, aes(data$totalSteps)) + 
+  geom_histogram(breaks=seq(10, 22000, by=1000),col="grey",fill= "red") +
+   ggtitle("Total Steps Counts per Date") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  xlab("Interval") + 
+  ylab("Total Step Counts")
+
+#calculate the mean and mean of total steps
+TotStepsMedian <- as.integer(median(data$totalSteps))
+TotStepsMean <- as.integer(mean(data$totalSteps))
+
+```
+
+
+#### histogram of the total number of steps taken each day
+
+```{r plot}
+g
+```
+
+
+  Mean total-number of steps taken per day: **`r TotStepsMedian`**
+
+  Median total number of steps taken per day: **`r TotStepsMean`**
+
+
+###[2] What is the average daily activity pattern?
+
+```{r Make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days , echo = TRUE}
+
+#calculate average of steps
+aveDailyActivity <- originalData %>% 
+                    group_by(interval) %>% 
+                    summarise(aveSteps = mean(steps))
+
+#calculate maximum of average steps
+maxX <- max(aveDailyActivity$aveSteps)
+
+#calcuate average daily activities with maximum aveSteps
+maxY <- aveDailyActivity[aveDailyActivity$aveSteps==maxX,]
+ 
+#set label
+labels  = paste("[", paste(as.numeric(maxY[1,1]),
+#set all maxY as numeric                           
+ceiling(as.numeric(maxY[1,2])),sep=","),"]")
+
+#plot interval vs aveSteps
+g2 <- ggplot(aveDailyActivity, aes(aveDailyActivity$interval,aveDailyActivity$aveSteps )) + geom_line() +
+  ggtitle("Average Steps Over 5min Intervals") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  xlab("Time Interval (5min unites)") + ylab("Average Steps") +
+  geom_text(aes(as.numeric(maxY[1,1] + 300), as.numeric(maxY[1,2])),label= labels)
+
+```
+####The average daily activity pattern
+
+```{r the average daily activity pattern}
+g2
+
+```
+
+####Maximum number of steps - on average across all the days
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps? 
+                          **`r as.numeric(maxY[1,1])`**
+                          
+###[3]Imputing missing values
+
+####Calculate and report the total number of missing values in the dataset 
+
+```{r Calculate and report the total number of missing values,echo = TRUE}
+
+#count total NA value rows in original data with NA
+countsNA = count(originalDataNA,is.na(originalDataNA$step))
+
+#set count numbers as numeric
+totalNA <- as.numeric(countsNA[2,2])
+
+```
+
+The total number of rows with NAs is **`r totalNA`**
+
+
+####Devise a strategy for filling in all of the missing values in the dataset
+
+```{r Devise a strategy for filling in all of the missing values in the dataset, echo = TRUE}
+
+#read dataset again to make sure itis original
+originalData = read.csv("activity.csv")
+
+#change the date as Date class and format "%m-%d-%Y"
+originalData$date <- as.Date(originalData$date,format = "%m/%d/%Y")
+originalData$date <- format.Date(originalData$date,"%m-%d-%Y")
+
+#original Data without NAs
+originalDataWithoutNA<-originalData[!is.na(originalData$steps),]
+
+#read data to use with NAs
+dataWithNA = read.csv("activity.csv")
+
+#change the date as Date class and format "%m-%d-%Y"
+dataWithNA$date <- as.Date(dataWithNA$date,format = "%m/%d/%Y")
+dataWithNA$date <- format.Date(dataWithNA$date,"%m-%d-%Y")
+
+#calculate the average steps without NAs over interval
+aveDailyActivityWtNA <- originalDataWithoutNA %>% 
+                      dplyr::group_by(interval) %>% 
+                      dplyr::summarise(aveSteps = mean(steps))
+
+aveDailyActivityWtNA$aveSteps <- ceiling(aveDailyActivityWtNA$aveSteps )
+
+#sum over new aveDailyActivityWtNA set aveSteps
+dataNA<- aveDailyActivityWtNA %>%
+    dplyr::summarise(totalSteps = sum(aveSteps))
+
+dataNA$totalSteps <- ceiling(dataNA$totalSteps)
+
+#calculate sum over all original data with NA
+ data <- dataWithNA %>%
+   group_by(date) %>%
+   summarise(totalSteps = sum(steps))%>%
+   ungroup()
+ 
+ #mutate dataset that is equal to the original dataset but with the missing data
+ data <- data %>% mutate(totalSteps = ifelse(is.na(totalSteps), dataNA, totalSteps))
+ 
+ #set totalSteps as integer to match origina type -- NEW Data
+ data$totalSteps <- as.integer(data$totalSteps)
+
+  #construct the plot
+g3 <- ggplot(data, aes(data$totalSteps)) + 
+      geom_histogram(breaks=seq(10, 22000, by=1000),col="grey",fill= "red") +
+      labs(title = "                      Total Steps Counts per Date") +
+      xlab("Total Steps") + 
+      ylab("Total Step Counts")
+```
+
+
+#### Histogram of the total number of steps taken each day with NA replaced
+
+```{r total number of steps taken each day with NA replaced}
+g3
+```
+
+#### Mean and Median total number of steps taken per day with replaced NAs
+
+```{r }
+TotStepsMedianNA <- as.integer(median(data$totalSteps))
+TotStepsMeanNA <- as.integer(mean(data$totalSteps))
+
+```
+ Mean total-number of steps taken per day with replaced NAs: **`r TotStepsMedianNA`**
+
+ Median total number of steps taken per day with replaced NAs: **`r TotStepsMeanNA`**
+
+#### Difference in Mean and Median total number of steps taken per day w/out replaced NAs
+ Mean difference = **`r sum(TotStepsMedianNA - TotStepsMedian)`**
+
+ Median difference = **`r sum(TotStepsMeanNA - TotStepsMean)`**
+
+ Percentage of mean diffrence =  **`r (sum(TotStepsMedianNA - TotStepsMedian)/TotStepsMedian)*100`**
+
+ Percentage of median diffrence =  **`r (sum(TotStepsMeanNA - TotStepsMean)/TotStepsMean)*100`**
+ 
+ ! Replacing NAs with averaged sum over interals wont impact significatly on data
+
+
+###Are there differences in activity patterns between weekdays and weekends?
+
+```{r  differences in activity patterns between weekdays and weekends}
+
+#again read the original data make sure they are original from previous calculations
+originalData = read.csv("activity.csv")
+
+#change the date as Date class and format "%m-%d-%Y"
+originalData$date <- as.Date(originalData$date,format = "%m/%d/%Y")
+originalData$date <- format.Date(originalData$date,"%m-%d-%Y")
+
+#original data without NAs
+originalDataWithoutNA<-originalData[!is.na(originalData$steps),]
+
+#for data  calculations with NAs
+dataWithNA = read.csv("activity.csv")
+
+#change the date as Date class and format "%m-%d-%Y"
+dataWithNA$date <- as.Date(dataWithNA$date,format = "%m/%d/%Y")
+dataWithNA$date <- format.Date(dataWithNA$date,"%m-%d-%Y")
+
+#mean average over intervals without NAs
+aveDailyActivityWtNA <- originalDataWithoutNA %>% 
+  dplyr::group_by(interval) %>% 
+  dplyr::summarise(aveSteps = mean(steps))
+
+aveDailyActivityWtNA$aveSteps <- ceiling(aveDailyActivityWtNA$aveSteps )
+
+#filter NAs from original dta
+filt<- filter(dataWithNA,is.na(dataWithNA$steps))
+
+#fill average activity steps into filtered NAs 
+filt$steps <- aveDailyActivityWtNA$aveSteps
+
+
+#bind both originalDataWithoutNA with filterd and replaced NAs
+finalData <- rbind(originalDataWithoutNA,filt)
+#arrange the data according to date order
+finalData<-arrange(finalData,finalData$date)
+
+#summarise mean steps on finalData
+aveDailyActivityWithNA <- finalData %>% 
+  dplyr::group_by(interval) %>% 
+  dplyr::summarise(aveSteps = ceiling(mean(steps)))
+
+#parse finalData$data as Date format
+finalData$date<-as.Date(parse_date_time(finalData$date, c('mdy')))
+
+#label weekdays
+weekdays1 <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+
+#factor weekday and weekend usng weekdays() function
+days <- factor((weekdays(finalData$date) %in% weekdays1), 
+               levels=c(FALSE, TRUE), labels=c('weekend', 'weekday'))
+
+#define days data set as data.frame
+dataDays<-data.frame(finalData,days)
+
+#summaraise mean over days and interval groups
+df <- dataDays %>%  group_by(days,interval) %>% 
+  summarise(mean = mean(steps))
+
+#construct the plot
+g4 <- ggplot(df, aes(x=interval, y=mean)) +   geom_line() + 
+  theme_bw() +
+  xlab("Interval") + ylab("Number of steps") + 
+  facet_wrap(days~.,ncol =1)
+```
+
+####Plot of average number of steps taken, averaged across all weekday days or weekend days
+
+```{r plot average number of steps taken, averaged across all weekday days or weekend days}
+g4
+
+```
